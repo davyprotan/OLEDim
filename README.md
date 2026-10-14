@@ -9,6 +9,8 @@ macOS can't change the brightness of most external monitors. Windows can, becaus
 - In either mode, nudge the slider and it learns your preference, like "10% dimmer than my MacBook".
 - **Dim when idle**: drops brightness after a few minutes of inactivity to reduce burn-in, and brings it back the moment you touch the mouse or keyboard. It won't dim while a video or call is keeping the screen awake.
 
+<p align="center"><img src="docs/menu.png" width="250" alt="OLEDim menu: brightness slider, presets, brightness modes and idle dimming"></p>
+
 Plus a brightness slider, one-click presets, smooth fades, and launch at login. No dependencies, no network access, a few hundred lines of Swift.
 
 ## Requirements
