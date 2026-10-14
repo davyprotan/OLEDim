@@ -1,9 +1,19 @@
 #!/bin/bash
 # Builds a release OLEDim.app into ./dist
+# Usage: ./scripts/build-app.sh [--install]
+#   --install  also replace /Applications/OLEDim.app and relaunch it
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-VERSION="${VERSION:-0.1.0}"
+INSTALL=false
+for arg in "$@"; do
+  case "$arg" in
+    --install) INSTALL=true ;;
+    *) echo "Unknown option: $arg (usage: $0 [--install])" >&2; exit 1 ;;
+  esac
+done
+
+VERSION="${VERSION:-0.1.1}"
 swift build -c release --arch arm64
 
 APP="dist/OLEDim.app"
@@ -32,3 +42,13 @@ PLIST
 
 codesign --force --sign - "$APP"
 echo "Built $APP"
+
+if $INSTALL; then
+  DEST="/Applications/OLEDim.app"
+  # Quit the running copy so its binary can be replaced; settings live in UserDefaults and are kept.
+  pkill -f "$DEST/Contents/MacOS/OLEDim" && sleep 1 || true
+  rm -rf "$DEST"
+  cp -R "$APP" "$DEST"
+  open "$DEST"
+  echo "Installed and launched $DEST"
+fi

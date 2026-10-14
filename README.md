@@ -40,9 +40,10 @@ Needs Xcode or the Command Line Tools:
 ```bash
 git clone https://github.com/davyprotan/OLEDim.git
 cd OLEDim
-./scripts/build-app.sh
-open dist/OLEDim.app
+./scripts/build-app.sh --install   # builds, copies to /Applications and launches
 ```
+
+Leave off `--install` to only build into `dist/`.
 
 ## Command line
 
