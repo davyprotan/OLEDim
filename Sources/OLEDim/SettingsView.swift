@@ -32,6 +32,7 @@ struct SettingsView: View {
                 Text("Brightness")
             } footer: {
                 Text(footer).font(.caption).foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
             }
 
             Section {
@@ -44,6 +45,7 @@ struct SettingsView: View {
             } footer: {
                 Text("Brightness comes back as soon as you move the mouse or type.")
                     .font(.caption).foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
             }
 
             Section("General") {
@@ -75,7 +77,7 @@ struct SettingsView: View {
     private func levelSlider(_ label: String, value: Binding<Double>) -> some View {
         HStack {
             Text(label).frame(width: 64, alignment: .leading)
-            Slider(value: value, in: 0...100, step: 1)
+            Slider(value: Binding(get: { value.wrappedValue }, set: { value.wrappedValue = $0.rounded() }), in: 0...100)
             Text("\(Int(value.wrappedValue))%").monospacedDigit().frame(width: 40, alignment: .trailing)
         }
     }
