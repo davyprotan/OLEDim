@@ -52,16 +52,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
         menu.addItem(.separator())
 
-        let auto = NSMenuItem(title: "Auto-adjust to room light", action: #selector(toggleAuto), keyEquivalent: "")
-        auto.target = self
-        auto.state = settings.autoEnabled ? .on : .off
-        if !automation.hasSensor {
-            auto.title = "Auto-adjust (no light sensor found)"
-            auto.isEnabled = false
-        } else if settings.autoEnabled, let lux = automation.smoothedLux {
-            auto.title += " (\(Int(lux)) lux)"
+        for mode in BrightnessMode.allCases {
+            let item = NSMenuItem(title: mode.rawValue, action: #selector(selectMode(_:)), keyEquivalent: "")
+            item.target = self
+            item.representedObject = mode.rawValue
+            item.state = settings.mode == mode ? .on : .off
+            if mode == .roomLight && !automation.hasSensor {
+                item.title += " (no light sensor)"
+                item.isEnabled = false
+            } else if mode == .matchMac && !BuiltInDisplay.isSupported {
+                item.isEnabled = false
+            } else if mode == settings.mode && mode != .manual && !BuiltInDisplay.isActive {
+                item.title += " (paused, lid closed)"
+            } else if mode == .roomLight && settings.mode == .roomLight, let lux = automation.smoothedLux {
+                item.title += " (\(Int(lux)) lux)"
+            }
+            menu.addItem(item)
         }
-        menu.addItem(auto)
+        menu.addItem(.separator())
 
         let idle = NSMenuItem(title: "Dim when idle (\(settings.idleMinutes) min)", action: #selector(toggleIdle), keyEquivalent: "")
         idle.target = self
@@ -98,14 +106,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     @objc private func applyPreset(_ sender: NSMenuItem) {
         guard let raw = sender.representedObject as? String, let period = Period(rawValue: raw) else { return }
-        // A preset is an explicit choice, so it takes over from auto-adjust.
-        settings.autoEnabled = false
+        // A preset is an explicit choice, so it switches to manual control.
+        settings.mode = .manual
+        automation.modeChanged()
         automation.userChangedBrightness(to: settings.level(for: period))
         controller.set(settings.level(for: period), fade: settings.fadeEnabled)
     }
 
-    @objc private func toggleAuto() {
-        settings.autoEnabled.toggle()
+    @objc private func selectMode(_ sender: NSMenuItem) {
+        guard let raw = sender.representedObject as? String, let mode = BrightnessMode(rawValue: raw) else { return }
+        settings.mode = mode
+        automation.modeChanged()
     }
 
     @objc private func toggleIdle() {
@@ -114,7 +125,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     @objc private func openSettings() {
         if settingsWindow == nil {
-            let window = NSWindow(contentViewController: NSHostingController(rootView: SettingsView()))
+            let window = NSWindow(contentViewController: NSHostingController(rootView: SettingsView(onModeChange: { [weak self] in
+                self?.automation.modeChanged()
+            })))
             window.title = "OLEDim Settings"
             window.styleMask = [.titled, .closable]
             window.isReleasedWhenClosed = false

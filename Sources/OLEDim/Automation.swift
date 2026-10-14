@@ -1,7 +1,7 @@
 import AppKit
 import IOKit.pwr_mgt
 
-/// Follows the ambient light sensor, and dims the monitor while the Mac sits idle (OLED burn-in protection).
+/// Drives the monitor from the room light or the MacBook's screen, and dims it while the Mac sits idle (OLED burn-in protection).
 final class Automation {
     private let controller: BrightnessController
     private let settings = Settings.shared
@@ -20,22 +20,41 @@ final class Automation {
         NSWorkspace.shared.notificationCenter.addObserver(forName: NSWorkspace.didWakeNotification, object: nil, queue: .main) { [weak self] _ in
             self?.smoothedLux = nil
         }
-        schedule(interval: 2)
-        tick()
+        resetTimer()
     }
 
-    private func schedule(interval: TimeInterval) {
+    /// Polls faster when the result has to feel immediate: waking from idle, or following the brightness keys.
+    private func resetTimer() {
+        let interval = levelBeforeIdle != nil ? 0.3 : settings.mode == .matchMac ? 0.4 : 2
         timer?.invalidate()
         timer = Timer.scheduledTimer(withTimeInterval: interval, repeats: true) { [weak self] _ in self?.tick() }
         timer?.tolerance = interval / 4
     }
 
-    /// Call when the user picks a brightness. With auto-adjust on, the difference from the curve is learned as an offset.
+    /// Call after the mode changes.
+    func modeChanged() {
+        smoothedLux = nil
+        resetTimer()
+        tick()
+    }
+
+    /// Call when the user picks a brightness. In an automatic mode, the difference from the curve is learned as an offset.
     func userChangedBrightness(to value: Double) {
-        levelBeforeIdle = nil
-        schedule(interval: 2)
-        if settings.autoEnabled, let lux = smoothedLux {
-            settings.autoOffset = value - settings.autoLevel(lux: lux, includeOffset: false)
+        if levelBeforeIdle != nil {
+            levelBeforeIdle = nil
+            resetTimer()
+        }
+        if let input = currentInput() {
+            settings.setOffset(value - settings.autoLevel(input: input, mode: settings.mode, includeOffset: false), for: settings.mode)
+        }
+    }
+
+    /// The 0...1 signal the current mode follows, or nil in manual mode / with the lid closed.
+    private func currentInput() -> Double? {
+        switch settings.mode {
+        case .manual: return nil
+        case .roomLight: return smoothedLux.map(Settings.normalized(lux:))
+        case .matchMac: return BuiltInDisplay.brightness()
         }
     }
 
@@ -46,8 +65,8 @@ final class Automation {
         if let restore = levelBeforeIdle {
             guard idle < 2 || !settings.idleDimEnabled else { return }
             levelBeforeIdle = nil
-            schedule(interval: 2)
-            let target = settings.autoEnabled ? smoothedLux.map { settings.autoLevel(lux: $0) } ?? restore : restore
+            resetTimer()
+            let target = currentInput().map { settings.autoLevel(input: $0, mode: settings.mode) } ?? restore
             controller.set(target, fade: settings.fadeEnabled)
             return
         }
@@ -58,20 +77,29 @@ final class Automation {
            controller.brightness > settings.idleLevel {
             levelBeforeIdle = controller.brightness
             controller.set(settings.idleLevel, fade: settings.fadeEnabled)
-            schedule(interval: 0.3) // poll fast so waking the screen feels instant
+            resetTimer()
             return
         }
 
-        guard settings.autoEnabled, AmbientLightSensor.builtInDisplayIsActive(), let lux = sensor?.lux() else { return }
-        let smoothed = smoothedLux.map { $0 * 0.7 + lux * 0.3 } ?? lux
-        smoothedLux = smoothed
-        // First run: treat the brightness the user already had as their preference for this light level.
-        if !UserDefaults.standard.bool(forKey: "autoCalibrated") {
-            UserDefaults.standard.set(true, forKey: "autoCalibrated")
-            settings.autoOffset = controller.brightness - settings.autoLevel(lux: smoothed, includeOffset: false)
+        // The light sensor sits beside the built-in screen, so both modes hold still with the lid closed.
+        guard settings.mode != .manual, BuiltInDisplay.isActive else { return }
+
+        if settings.mode == .roomLight {
+            guard let lux = sensor?.lux() else { return }
+            smoothedLux = smoothedLux.map { $0 * 0.7 + lux * 0.3 } ?? lux
         }
-        let target = settings.autoLevel(lux: smoothed).rounded()
-        if abs(target - controller.brightness) >= 3 {
+        guard let input = currentInput() else { return }
+
+        // First use of a mode: treat the brightness the user already had as their preference.
+        let calibratedKey = "calibrated.\(settings.mode.rawValue)"
+        if !UserDefaults.standard.bool(forKey: calibratedKey) {
+            UserDefaults.standard.set(true, forKey: calibratedKey)
+            userChangedBrightness(to: controller.brightness)
+        }
+
+        let target = settings.autoLevel(input: input, mode: settings.mode).rounded()
+        let threshold: Double = settings.mode == .matchMac ? 1 : 3
+        if abs(target - controller.brightness) >= threshold {
             controller.set(target, fade: settings.fadeEnabled)
         }
     }

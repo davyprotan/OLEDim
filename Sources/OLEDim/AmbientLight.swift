@@ -1,5 +1,4 @@
 import Foundation
-import CoreGraphics
 
 // Private IOHIDEventSystem calls for reading the MacBook's ambient light sensor on Apple Silicon.
 private typealias HIDClient = CFTypeRef
@@ -28,11 +27,4 @@ final class AmbientLightSensor {
         return IOHIDEventGetFloatValue(event, Int32(Self.eventType << 16))
     }
 
-    /// The sensor sits beside the built-in display, so readings are meaningless with the lid closed.
-    static func builtInDisplayIsActive() -> Bool {
-        var count: UInt32 = 0
-        var ids = [CGDirectDisplayID](repeating: 0, count: 16)
-        guard CGGetActiveDisplayList(16, &ids, &count) == .success else { return false }
-        return ids.prefix(Int(count)).contains { CGDisplayIsBuiltin($0) != 0 }
-    }
 }

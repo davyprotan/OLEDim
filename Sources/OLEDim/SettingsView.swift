@@ -3,6 +3,7 @@ import ServiceManagement
 
 struct SettingsView: View {
     @ObservedObject var settings = Settings.shared
+    var onModeChange: () -> Void
     @State private var launchAtLogin = SMAppService.mainApp.status == .enabled
 
     var body: some View {
@@ -14,19 +15,23 @@ struct SettingsView: View {
             }
 
             Section {
-                Toggle("Auto-adjust to room light", isOn: $settings.autoEnabled)
-                levelSlider("Darkest", value: $settings.autoMin)
-                levelSlider("Brightest", value: $settings.autoMax)
-                HStack {
-                    Text("Your adjustment: \(settings.autoOffset >= 0 ? "+" : "")\(Int(settings.autoOffset.rounded()))%")
-                    Spacer()
-                    Button("Reset") { settings.autoOffset = 0 }.disabled(settings.autoOffset == 0)
+                Picker("Mode", selection: $settings.mode) {
+                    ForEach(BrightnessMode.allCases, id: \.self) { Text($0.rawValue).tag($0) }
+                }
+                if settings.mode != .manual {
+                    levelSlider("Darkest", value: $settings.autoMin)
+                    levelSlider("Brightest", value: $settings.autoMax)
+                    HStack {
+                        let offset = Int(settings.offset(for: settings.mode).rounded())
+                        Text("Your adjustment: \(offset >= 0 ? "+" : "")\(offset)%")
+                        Spacer()
+                        Button("Reset") { settings.setOffset(0, for: settings.mode) }.disabled(offset == 0)
+                    }
                 }
             } header: {
-                Text("Auto-adjust")
+                Text("Brightness")
             } footer: {
-                Text("Uses your MacBook's light sensor. Move the menu slider while auto-adjust is on and it learns your preference.")
-                    .font(.caption).foregroundStyle(.secondary)
+                Text(footer).font(.caption).foregroundStyle(.secondary)
             }
 
             Section {
@@ -54,8 +59,17 @@ struct SettingsView: View {
             }
         }
         .formStyle(.grouped)
+        .onChange(of: settings.mode) { _ in onModeChange() }
         .frame(width: 400)
         .fixedSize()
+    }
+
+    private var footer: String {
+        switch settings.mode {
+        case .manual: return "Set brightness with the menu bar slider or presets."
+        case .roomLight: return "Follows your MacBook's light sensor. Move the menu slider and it learns your preference."
+        case .matchMac: return "Follows your MacBook screen, including the brightness keys and macOS auto-brightness. Move the menu slider and it learns your preference."
+        }
     }
 
     private func levelSlider(_ label: String, value: Binding<Double>) -> some View {

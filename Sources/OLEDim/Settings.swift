@@ -1,6 +1,13 @@
 import Foundation
 import Combine
 
+/// Where the monitor's brightness comes from.
+enum BrightnessMode: String, CaseIterable {
+    case manual = "Manual"
+    case roomLight = "Match room light"
+    case matchMac = "Match MacBook screen"
+}
+
 /// One-click brightness presets shown in the menu.
 enum Period: String, CaseIterable {
     case day = "Day", evening = "Evening", night = "Night"
@@ -15,11 +22,12 @@ final class Settings: ObservableObject {
     @Published var eveningLevel: Double { didSet { defaults.set(eveningLevel, forKey: "eveningLevel") } }
     @Published var nightLevel: Double { didSet { defaults.set(nightLevel, forKey: "nightLevel") } }
 
-    @Published var autoEnabled: Bool { didSet { defaults.set(autoEnabled, forKey: "autoEnabled") } }
+    @Published var mode: BrightnessMode { didSet { defaults.set(mode.rawValue, forKey: "mode") } }
     @Published var autoMin: Double { didSet { defaults.set(autoMin, forKey: "autoMin") } }
     @Published var autoMax: Double { didSet { defaults.set(autoMax, forKey: "autoMax") } }
-    /// Learned from manual slider moves while auto-adjust is on.
-    @Published var autoOffset: Double { didSet { defaults.set(autoOffset, forKey: "autoOffset") } }
+    /// Learned from manual slider moves, kept separately for each automatic mode.
+    @Published var roomOffset: Double { didSet { defaults.set(roomOffset, forKey: "roomOffset") } }
+    @Published var macOffset: Double { didSet { defaults.set(macOffset, forKey: "macOffset") } }
 
     @Published var idleDimEnabled: Bool { didSet { defaults.set(idleDimEnabled, forKey: "idleDimEnabled") } }
     @Published var idleMinutes: Int { didSet { defaults.set(idleMinutes, forKey: "idleMinutes") } }
@@ -31,17 +39,18 @@ final class Settings: ObservableObject {
     private init() {
         defaults.register(defaults: [
             "dayLevel": 70.0, "eveningLevel": 45.0, "nightLevel": 20.0,
-            "autoEnabled": true, "autoMin": 5.0, "autoMax": 100.0, "autoOffset": 0.0,
+            "mode": BrightnessMode.roomLight.rawValue, "autoMin": 5.0, "autoMax": 100.0, "roomOffset": 0.0, "macOffset": 0.0,
             "idleDimEnabled": true, "idleMinutes": 5, "idleLevel": 5.0, "idleRespectsMedia": true,
             "fadeEnabled": true,
         ])
         dayLevel = defaults.double(forKey: "dayLevel")
         eveningLevel = defaults.double(forKey: "eveningLevel")
         nightLevel = defaults.double(forKey: "nightLevel")
-        autoEnabled = defaults.bool(forKey: "autoEnabled")
+        mode = BrightnessMode(rawValue: defaults.string(forKey: "mode") ?? "") ?? .roomLight
         autoMin = defaults.double(forKey: "autoMin")
         autoMax = defaults.double(forKey: "autoMax")
-        autoOffset = defaults.double(forKey: "autoOffset")
+        roomOffset = defaults.double(forKey: "roomOffset")
+        macOffset = defaults.double(forKey: "macOffset")
         idleDimEnabled = defaults.bool(forKey: "idleDimEnabled")
         idleMinutes = defaults.integer(forKey: "idleMinutes")
         idleLevel = defaults.double(forKey: "idleLevel")
@@ -58,10 +67,30 @@ final class Settings: ObservableObject {
     }
 
 
-    /// Brightness for a light level: log-scaled between autoMin (darkness) and autoMax (~1000 lux), plus the learned offset.
-    func autoLevel(lux: Double, includeOffset: Bool = true) -> Double {
-        let t = min(1, log10(max(lux, 0) + 1) / 3)
-        let base = autoMin + (autoMax - autoMin) * t
-        return min(100, max(0, base + (includeOffset ? autoOffset : 0)))
+    func offset(for mode: BrightnessMode) -> Double {
+        switch mode {
+        case .manual: return 0
+        case .roomLight: return roomOffset
+        case .matchMac: return macOffset
+        }
+    }
+
+    func setOffset(_ value: Double, for mode: BrightnessMode) {
+        switch mode {
+        case .manual: break
+        case .roomLight: roomOffset = value
+        case .matchMac: macOffset = value
+        }
+    }
+
+    /// Maps a 0...1 input (log-scaled lux, or the MacBook's brightness) onto autoMin...autoMax.
+    func autoLevel(input: Double, mode: BrightnessMode, includeOffset: Bool = true) -> Double {
+        let base = autoMin + (autoMax - autoMin) * min(1, max(0, input))
+        return min(100, max(0, base + (includeOffset ? offset(for: mode) : 0)))
+    }
+
+    /// Room light maps on a log scale so dim rooms get finer steps; ~1000 lux counts as fully bright.
+    static func normalized(lux: Double) -> Double {
+        min(1, log10(max(lux, 0) + 1) / 3)
     }
 }
