@@ -21,16 +21,22 @@ Tested on an MSI MPG272UX OLED with an M3 Pro MacBook Pro.
 
 ## Install
 
-Build from source (needs Xcode or the Command Line Tools):
+1. Download `OLEDim.zip` from the [latest release](https://github.com/davyprotan/OLEDim/releases/latest) and unzip it.
+2. Move `OLEDim.app` to your Applications folder.
+3. The first time, **right-click the app → Open → Open**. OLEDim isn't signed with a paid Apple Developer certificate, so macOS asks before running it. After that it opens normally.
+
+On recent macOS versions, if there's no Open option, go to **System Settings → Privacy & Security** and click **Open Anyway**.
+
+### Build from source
+
+Needs Xcode or the Command Line Tools:
 
 ```bash
-git clone https://github.com/<you>/OLEDim.git
+git clone https://github.com/davyprotan/OLEDim.git
 cd OLEDim
 ./scripts/build-app.sh
 open dist/OLEDim.app
 ```
-
-Move `dist/OLEDim.app` to `/Applications` to keep it.
 
 ## Command line
 
