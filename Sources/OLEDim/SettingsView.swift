@@ -32,6 +32,7 @@ struct SettingsView: View {
                 Text("Brightness")
             } footer: {
                 Text(footer).font(.caption).foregroundStyle(.secondary)
+                    .multilineTextAlignment(.leading)
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
 
@@ -45,6 +46,7 @@ struct SettingsView: View {
             } footer: {
                 Text("Brightness comes back as soon as you move the mouse or type.")
                     .font(.caption).foregroundStyle(.secondary)
+                    .multilineTextAlignment(.leading)
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
 
