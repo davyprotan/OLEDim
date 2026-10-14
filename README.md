@@ -40,6 +40,7 @@ The same binary works as a CLI:
 /Applications/OLEDim.app/Contents/MacOS/OLEDim list      # external displays found
 /Applications/OLEDim.app/Contents/MacOS/OLEDim get       # current brightness
 /Applications/OLEDim.app/Contents/MacOS/OLEDim set 40    # set brightness (0-100)
+/Applications/OLEDim.app/Contents/MacOS/OLEDim login on  # start at login (or: login off)
 ```
 
 ## Troubleshooting

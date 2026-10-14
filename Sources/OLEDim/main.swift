@@ -1,7 +1,18 @@
 import AppKit
+import ServiceManagement
 
-// CLI mode: `OLEDim get` / `OLEDim set <0-100>` for scripting and testing.
+// CLI mode: `OLEDim get` / `OLEDim set <0-100>` / `OLEDim login on|off` for scripting and testing.
 let args = CommandLine.arguments.dropFirst()
+if args.first == "login" {
+    do {
+        if args.dropFirst().first == "off" { try SMAppService.mainApp.unregister() } else { try SMAppService.mainApp.register() }
+        print("Launch at login: \(SMAppService.mainApp.status == .enabled ? "on" : "off")")
+        exit(0)
+    } catch {
+        print("Couldn't change launch at login: \(error.localizedDescription)")
+        exit(1)
+    }
+}
 if let command = args.first, ["get", "set", "list"].contains(command) {
     let displays = DDCDisplay.all()
     guard !displays.isEmpty else { print("No external DDC displays found"); exit(1) }
