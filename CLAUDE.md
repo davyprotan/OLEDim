@@ -24,6 +24,9 @@ Menu bar app (Swift, no dependencies) that sets external monitor brightness over
 - **Private APIs.** DDC, the light sensor and MacBook brightness all use undocumented symbols. A macOS update can break any of them; check these first if something stops working.
 - **Startup race.** Automation must not act before `controller.isReady`. Before that fix, first-run calibration used the placeholder brightness (50) and visibly dimmed the monitor.
 - **Calibration runs once per mode**, keyed `calibrated.<mode raw value>`. To recalibrate: `defaults delete io.github.oledim "calibrated.Match MacBook screen"` (or the room-light key) and reset the offset in Settings.
+- **DDC reads are flaky; never assume a second read matches the first.** The monitor can stop answering mid-rescan (wake, replug). `lazy.compactMap { $0.read(...) }.first` re-runs the closure and force-unwraps, which crashed the app on 2026-10-16. Read once into a local.
+- **"It didn't start" usually means it crashed.** Launch at login only fires at login; nothing relaunches the app after a crash. Check `~/Library/Logs/DiagnosticReports/OLEDim-*.ips` first; symbolicate with `xcrun atos -i -o /Applications/OLEDim.app/Contents/MacOS/OLEDim -l <base> <addr>`.
+- `OLEDim login` with any argument other than `off` turns launch at login **on**; there's no read-only status command.
 - Both automatic modes pause with the lid closed: the light sensor is beside the built-in screen.
 - Sliders in `SettingsView` round in the binding instead of using `step:`, which draws a tick for every 1%.
 - `swift build --show-bin-path` is the binary location; it's `.build/out/Products/Release`, not the older `.build/<triple>/release`.
