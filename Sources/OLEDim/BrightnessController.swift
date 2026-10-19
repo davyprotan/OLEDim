@@ -18,7 +18,12 @@ final class BrightnessController: ObservableObject {
     func rescan() {
         queue.async {
             let found = DDCDisplay.all()
-            let current = found.lazy.compactMap { $0.read(.luminance) }.first
+            // A plain loop, not `lazy.compactMap(...).first`: that calls read() twice and force-unwraps the
+            // second result, which crashed when the monitor stopped answering mid-rescan (e.g. on wake or replug).
+            var current: (current: UInt16, max: UInt16)?
+            for display in found {
+                if let value = display.read(.luminance) { current = value; break }
+            }
             DispatchQueue.main.async {
                 self.displays = found
                 self.displayNames = found.map(\.name)
