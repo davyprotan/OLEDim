@@ -6,7 +6,9 @@ Menu bar app (Swift, no dependencies) that sets external monitor brightness over
 
 - `./scripts/build-app.sh` builds `dist/OLEDim.app`; `--install` also replaces `/Applications/OLEDim.app` and relaunches it. Settings live in UserDefaults (`io.github.oledim`) and survive reinstalls.
 - The binary doubles as a CLI: `OLEDim list | get | set <0-100> | login on|off`.
-- Ground truth for what the monitor is actually at: `m1ddc display 2 get luminance` (`brew install m1ddc`; display 2 is the MSI MPG272UX on the dev Mac).
+- Ground truth for what the monitor is actually at: `m1ddc display 2 get luminance` (`brew install m1ddc`; display 2 is the MSI MPG272UX on the dev Mac). Not installed as of 2026-10-30; `OLEDim get` reads the same register.
+- To test sync: `OLEDim set 70` behind the app's back; in an automatic mode it should snap back within ~30s.
+- To test following: in Match MacBook mode, press the brightness keys with the menu closed, then open; the monitor should follow within 1-2s. Expected level is `autoMin + (autoMax - autoMin) * macBrightness + macOffset`, clamped to 0-100 (`defaults read io.github.oledim macOffset`).
 - No unit tests. Verify on hardware: read brightness back after every change.
 
 ## Files
@@ -14,7 +16,7 @@ Menu bar app (Swift, no dependencies) that sets external monitor brightness over
 | File | Why it exists |
 |---|---|
 | `DDC.swift` | I2C read/write via private `IOAVService*` symbols; finds external displays through `DCPAVServiceProxy` nodes. |
-| `BrightnessController.swift` | Serialises DDC writes on one queue; a generation counter cancels in-flight fades so slider drags don't pile up. `isReady` gates everything until the real brightness is read. |
+| `BrightnessController.swift` | Serialises DDC writes on one queue; a generation counter cancels in-flight fades so slider drags don't pile up. `isReady` gates everything until the real brightness is read. `resync()` re-reads the monitor; a reading taken before a newer `set()` is dropped. |
 | `Automation.swift` | Brightness modes (room light / match MacBook), learned offsets, idle dimming. |
 | `AmbientLight.swift` / `BuiltInDisplay.swift` | Private `IOHIDEventSystemClient` (light sensor, lux) and `DisplayServicesGetBrightness` (MacBook screen, 0–1). |
 | `Settings.swift` / `SettingsView.swift` / `AppDelegate.swift` | Preferences, SwiftUI settings window, NSStatusItem menu. |
@@ -25,6 +27,9 @@ Menu bar app (Swift, no dependencies) that sets external monitor brightness over
 - **Startup race.** Automation must not act before `controller.isReady`. Before that fix, first-run calibration used the placeholder brightness (50) and visibly dimmed the monitor.
 - **Calibration runs once per mode**, keyed `calibrated.<mode raw value>`. To recalibrate: `defaults delete io.github.oledim "calibrated.Match MacBook screen"` (or the room-light key) and reset the offset in Settings.
 - **DDC reads are flaky; never assume a second read matches the first.** The monitor can stop answering mid-rescan (wake, replug). `lazy.compactMap { $0.read(...) }.first` re-runs the closure and force-unwraps, which crashed the app on 2026-10-16. Read once into a local.
+- **`controller.brightness` is a claim, not a fact.** `set()` updates it before the write lands, and the monitor changes behind our back (wake at its own level, its own buttons, replug). Automation only writes when the target differs from it, so a stale value never self-corrects. That's why the app reads back after a failed write, after wake (3s, 10s) and every 30s ([#2](https://github.com/davyprotan/OLEDim/pull/2)). Don't remove the periodic resync to save I2C traffic.
+- **The automation timer must stay in `.common` run-loop mode.** The default mode doesn't fire during menu tracking or slider drags, so the monitor ignored the brightness keys while the menu was open ([#2](https://github.com/davyprotan/OLEDim/pull/2)).
+- **Dragging the menu slider rewrites the learned offset, which can make the keys look dead.** At a `macOffset` of -24, the monitor sits at 0 once the MacBook is below about 20% and tops out near 76%. Check the offset before debugging "ignores the keys".
 - **"It didn't start" usually means it crashed.** Launch at login only fires at login; nothing relaunches the app after a crash. Check `~/Library/Logs/DiagnosticReports/OLEDim-*.ips` first; symbolicate with `xcrun atos -i -o /Applications/OLEDim.app/Contents/MacOS/OLEDim -l <base> <addr>`.
 - `OLEDim login` with any argument other than `off` turns launch at login **on**; there's no read-only status command.
 - Both automatic modes pause with the lid closed: the light sensor is beside the built-in screen.

@@ -12,6 +12,9 @@ final class Automation {
     private(set) var smoothedLux: Double?
     /// Brightness to return to when the user comes back; non-nil while idle-dimmed.
     private var levelBeforeIdle: Double?
+    /// Re-reads the monitor now and then: nothing else notices its own buttons, an input switch, or a write that never landed.
+    private var lastResync = Date()
+    private static let resyncInterval: TimeInterval = 30
 
     var hasSensor: Bool { sensor != nil }
 
@@ -19,6 +22,10 @@ final class Automation {
         self.controller = controller
         NSWorkspace.shared.notificationCenter.addObserver(forName: NSWorkspace.didWakeNotification, object: nil, queue: .main) { [weak self] _ in
             self?.smoothedLux = nil
+            // Monitors often come back from sleep at their own stored level, and take a few seconds to answer DDC.
+            for delay in [3.0, 10.0] {
+                DispatchQueue.main.asyncAfter(deadline: .now() + delay) { self?.controller.resync() }
+            }
         }
         resetTimer()
     }
@@ -27,8 +34,11 @@ final class Automation {
     private func resetTimer() {
         let interval = levelBeforeIdle != nil ? 0.3 : settings.mode == .matchMac ? 0.4 : 2
         timer?.invalidate()
-        timer = Timer.scheduledTimer(withTimeInterval: interval, repeats: true) { [weak self] _ in self?.tick() }
-        timer?.tolerance = interval / 4
+        let timer = Timer(timeInterval: interval, repeats: true) { [weak self] _ in self?.tick() }
+        timer.tolerance = interval / 4
+        // .common, not the default mode: that one stops firing while the status menu is open or a slider is being dragged.
+        RunLoop.main.add(timer, forMode: .common)
+        self.timer = timer
     }
 
     /// Call after the mode changes.
@@ -60,6 +70,10 @@ final class Automation {
 
     private func tick() {
         guard controller.isReady else { return }
+        if Date().timeIntervalSince(lastResync) >= Self.resyncInterval {
+            lastResync = Date()
+            controller.resync()
+        }
         let idle = CGEventSource.secondsSinceLastEventType(.combinedSessionState, eventType: CGEventType(rawValue: ~0)!)
 
         if let restore = levelBeforeIdle {
