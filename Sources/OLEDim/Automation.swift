@@ -34,8 +34,11 @@ final class Automation {
     private func resetTimer() {
         let interval = levelBeforeIdle != nil ? 0.3 : settings.mode == .matchMac ? 0.4 : 2
         timer?.invalidate()
-        timer = Timer.scheduledTimer(withTimeInterval: interval, repeats: true) { [weak self] _ in self?.tick() }
-        timer?.tolerance = interval / 4
+        let timer = Timer(timeInterval: interval, repeats: true) { [weak self] _ in self?.tick() }
+        timer.tolerance = interval / 4
+        // .common, not the default mode: that one stops firing while the status menu is open or a slider is being dragged.
+        RunLoop.main.add(timer, forMode: .common)
+        self.timer = timer
     }
 
     /// Call after the mode changes.
