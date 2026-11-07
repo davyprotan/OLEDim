@@ -25,6 +25,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             self?.valueLabel?.stringValue = "\(Int(value))%"
         }.store(in: &cancellables)
 
+        // Turning software dimming off has to lift a level that's below 0 now, even in manual mode.
+        settings.$softwareDimEnabled.dropFirst().receive(on: RunLoop.main).sink { [weak self] enabled in
+            guard let self, !enabled, self.controller.brightness < 0 else { return }
+            self.controller.set(0, fade: self.settings.fadeEnabled)
+        }.store(in: &cancellables)
+
         NotificationCenter.default.addObserver(forName: NSApplication.didChangeScreenParametersNotification, object: nil, queue: .main) { [weak self] _ in
             self?.controller.rescan()
         }
@@ -85,7 +91,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     private func sliderItem() -> NSMenuItem {
         let view = NSView(frame: NSRect(x: 0, y: 0, width: 240, height: 32))
-        slider = NSSlider(value: controller.brightness, minValue: 0, maxValue: 100, target: self, action: #selector(sliderMoved(_:)))
+        slider = NSSlider(value: controller.brightness, minValue: settings.minLevel, maxValue: 100, target: self, action: #selector(sliderMoved(_:)))
         slider.isContinuous = true
         slider.frame = NSRect(x: 16, y: 6, width: 170, height: 20)
         valueLabel = NSTextField(labelWithString: "\(Int(controller.brightness))%")
