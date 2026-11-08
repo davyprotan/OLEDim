@@ -1,6 +1,9 @@
 import AppKit
 import Combine
 import SwiftUI
+import os
+
+let log = Logger(subsystem: "io.github.oledim", category: "app")
 
 final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private let controller = BrightnessController()
@@ -91,7 +94,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     private func sliderItem() -> NSMenuItem {
         let view = NSView(frame: NSRect(x: 0, y: 0, width: 240, height: 32))
-        slider = NSSlider(value: controller.brightness, minValue: settings.minLevel, maxValue: 100, target: self, action: #selector(sliderMoved(_:)))
+        slider = MenuSlider(value: controller.brightness, minValue: settings.minLevel, maxValue: 100, target: self, action: #selector(sliderMoved(_:)))
         slider.isContinuous = true
         slider.frame = NSRect(x: 16, y: 6, width: 170, height: 20)
         valueLabel = NSTextField(labelWithString: "\(Int(controller.brightness))%")
@@ -142,5 +145,31 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         settingsWindow?.center()
         NSApp.activate(ignoringOtherApps: true)
         settingsWindow?.makeKeyAndOrderFront(nil)
+    }
+}
+
+/// A slider that, once clicked, takes the left/right arrow keys (1% a press, 10% with Shift).
+/// NSSlider only becomes first responder with Full Keyboard Access on, and inside a menu the arrows would otherwise move
+/// the menu highlight, so it claims first responder on click and handles the arrows itself.
+private final class MenuSlider: NSSlider {
+    override var acceptsFirstResponder: Bool { true }
+
+    override func mouseDown(with event: NSEvent) {
+        window?.makeFirstResponder(self)
+        super.mouseDown(with: event)
+    }
+
+    override func keyDown(with event: NSEvent) {
+        let step: Double = event.modifierFlags.contains(.shift) ? 10 : 1
+        switch event.specialKey {
+        case .leftArrow?: nudge(by: -step)
+        case .rightArrow?: nudge(by: step)
+        default: super.keyDown(with: event)
+        }
+    }
+
+    private func nudge(by delta: Double) {
+        doubleValue = min(maxValue, max(minValue, doubleValue.rounded() + delta))
+        sendAction(action, to: target)
     }
 }

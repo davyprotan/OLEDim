@@ -54,7 +54,8 @@ final class Automation {
             levelBeforeIdle = nil
             resetTimer()
         }
-        if let input = currentInput() {
+        // With the MacBook screen off the monitor goes black regardless of the curve, so there's nothing to learn.
+        if let input = currentInput(), !Self.macScreenOff(mode: settings.mode, input: input) {
             settings.setOffset(value - settings.autoLevel(input: input, mode: settings.mode, includeOffset: false), for: settings.mode)
         }
     }
@@ -80,7 +81,9 @@ final class Automation {
             guard idle < 2 || !settings.idleDimEnabled else { return }
             levelBeforeIdle = nil
             resetTimer()
-            let target = currentInput().map { settings.autoLevel(input: $0, mode: settings.mode) } ?? restore
+            let target = currentInput().map {
+            Self.macScreenOff(mode: settings.mode, input: $0) ? settings.lowestLevel : settings.autoLevel(input: $0, mode: settings.mode)
+        } ?? restore
             controller.set(target, fade: settings.fadeEnabled)
             return
         }
@@ -111,11 +114,18 @@ final class Automation {
             userChangedBrightness(to: controller.brightness)
         }
 
-        let target = settings.autoLevel(input: input, mode: settings.mode).rounded()
+        // MacBook screen off (lowest key step and below) means the monitor goes dark too.
+        let target = Self.macScreenOff(mode: settings.mode, input: input)
+            ? settings.lowestLevel
+            : settings.autoLevel(input: input, mode: settings.mode).rounded()
         let threshold: Double = settings.mode == .matchMac ? 1 : 3
         if abs(target - controller.brightness) >= threshold {
             controller.set(target, fade: settings.fadeEnabled)
         }
+    }
+
+    static func macScreenOff(mode: BrightnessMode, input: Double) -> Bool {
+        mode == .matchMac && input < 0.001
     }
 
     /// True when an app (video player, call, presentation) is holding a "keep display on" assertion.

@@ -76,7 +76,8 @@ final class BrightnessController: ObservableObject {
 
     /// Sets brightness on every external display. A newer call cancels any fade still in progress.
     func set(_ target: Double, fade: Bool) {
-        let target = min(max(target.rounded(), Settings.shared.minLevel), 100)
+        let target = min(max(target.rounded(), Settings.shared.lowestLevel), 100)
+        log.info("set \(target, privacy: .public) fade=\(fade, privacy: .public)")
         let start = brightness
         brightness = target
 

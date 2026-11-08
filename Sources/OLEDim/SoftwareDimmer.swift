@@ -10,7 +10,7 @@ final class SoftwareDimmer {
 
     /// Sets the share of light (0...1) the external displays keep. Main thread only.
     func set(light: Double) {
-        let light = min(1, max(0.05, light))
+        let light = min(1, max(0, light))
         guard light != factor else { return }
         factor = light
         apply()

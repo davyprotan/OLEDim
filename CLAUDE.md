@@ -7,6 +7,7 @@ Menu bar app (Swift, no dependencies) that sets external monitor brightness over
 - `./scripts/build-app.sh` builds `dist/OLEDim.app`; `--install` also replaces `/Applications/OLEDim.app` and relaunches it. Settings live in UserDefaults (`io.github.oledim`) and survive reinstalls.
 - The binary doubles as a CLI: `OLEDim list | get | set <0-100> | login on|off`.
 - Ground truth for what the monitor is actually at: `m1ddc display 2 get luminance` (`brew install m1ddc`; display 2 is the MSI MPG272UX on the dev Mac). Not installed as of 2026-10-30; `OLEDim get` reads the same register.
+- Every `set()` is logged: `/usr/bin/log show --predicate 'subsystem == "io.github.oledim"' --info --last 10m` (the full path matters: `log` is a zsh builtin). Info-level entries live in memory only, so read them soon after.
 - To test sync: `OLEDim set 70` behind the app's back; in an automatic mode it should snap back within ~30s.
 - To test following: in Match MacBook mode, press the brightness keys with the menu closed, then open; the monitor should follow within 1-2s. Expected level is `autoMin + (autoMax - autoMin) * macBrightness + macOffset`, clamped to 0-100 (`defaults read io.github.oledim macOffset`).
 - No unit tests. Verify on hardware: read brightness back after every change.
@@ -34,6 +35,8 @@ Menu bar app (Swift, no dependencies) that sets external monitor brightness over
 - **"It didn't start" usually means it crashed.** Launch at login only fires at login; nothing relaunches the app after a crash. Check `~/Library/Logs/DiagnosticReports/OLEDim-*.ips` first; symbolicate with `xcrun atos -i -o /Applications/OLEDim.app/Contents/MacOS/OLEDim -l <base> <addr>`.
 - `OLEDim login` with any argument other than `off` turns launch at login **on**; there's no read-only status command.
 - **DDC 0 is not black.** The MPG272UX still gives off a fair amount of light at 0, so levels below 0 are software dimming (gamma), not a monitor setting. `OLEDim get` reads 0 for any level ≤ 0; check the gamma with `CGGetDisplayTransferByTable` (1.0 at the top = no dimming, `light^(1/2.2)` otherwise). macOS drops the gamma table on quit, crash, reconfigure and sometimes wake, so `resync()` and `rescan()` reapply it. It replaces the display's calibration curve while active, and dims every non-built-in display, not only DDC ones.
+- **MacBook screen off → monitor black** in Match MacBook mode (level -100, reached only that way; the sliders stop at -75 so the monitor can't be blacked out in clamshell, where the menu bar is on it). Slider moves made while the MacBook screen is off aren't learned.
+- The menu slider takes ←/→ once clicked (Shift = 10%): `MenuSlider` in `AppDelegate.swift` grabs first responder, because NSSlider only does that with Full Keyboard Access on.
 - Both automatic modes pause with the lid closed: the light sensor is beside the built-in screen.
 - Sliders in `SettingsView` round in the binding instead of using `step:`, which draws a tick for every 1%.
 - `swift build --show-bin-path` is the binary location; it's `.build/out/Products/Release`, not the older `.build/<triple>/release`.

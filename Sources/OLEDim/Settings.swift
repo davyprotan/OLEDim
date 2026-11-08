@@ -41,6 +41,10 @@ final class Settings: ObservableObject {
     /// Below 0 is software dimming: -75 keeps a quarter of the light the monitor gives at 0.
     static let softwareDimFloor: Double = -75
     var minLevel: Double { softwareDimEnabled ? Self.softwareDimFloor : 0 }
+    /// Black. Only reached when the MacBook screen is off in Match MacBook mode; the sliders stop at `minLevel`
+    /// so a blacked-out monitor can always be seen to undo (in clamshell the menu bar lives on it).
+    static let black: Double = -100
+    var lowestLevel: Double { softwareDimEnabled ? Self.black : 0 }
 
     private init() {
         defaults.register(defaults: [
