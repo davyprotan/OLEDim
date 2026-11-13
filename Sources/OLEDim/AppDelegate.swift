@@ -23,7 +23,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.delegate = self
         statusItem.menu = menu
 
-        controller.$brightness.receive(on: RunLoop.main).sink { [weak self] value in
+        // DispatchQueue.main, not RunLoop.main: the run loop scheduler only delivers in the default mode, which doesn't run
+        // while the menu is open, so the label next to the slider would freeze until the menu closed.
+        controller.$brightness.receive(on: DispatchQueue.main).sink { [weak self] value in
             self?.slider?.doubleValue = value
             self?.valueLabel?.stringValue = "\(Int(value))%"
         }.store(in: &cancellables)
@@ -109,6 +111,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     @objc private func sliderMoved(_ sender: NSSlider) {
+        valueLabel?.stringValue = "\(Int(sender.doubleValue))%"
         automation.userChangedBrightness(to: sender.doubleValue)
         controller.set(sender.doubleValue, fade: false)
     }
