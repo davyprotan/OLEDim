@@ -13,7 +13,7 @@ for arg in "$@"; do
   esac
 done
 
-VERSION="${VERSION:-0.1.1}"
+VERSION="${VERSION:-0.2.0}"
 swift build -c release --arch arm64
 
 APP="dist/OLEDim.app"
