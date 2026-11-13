@@ -52,6 +52,7 @@ struct SettingsView: View {
 
             Section("General") {
                 Toggle("Fade between levels", isOn: $settings.fadeEnabled)
+                Toggle("Dim below the monitor's minimum", isOn: $settings.softwareDimEnabled)
                 Toggle("Launch at login", isOn: $launchAtLogin)
                     .onChange(of: launchAtLogin) { enabled in
                         do {
@@ -70,16 +71,20 @@ struct SettingsView: View {
 
     private var footer: String {
         switch settings.mode {
-        case .manual: return "Set brightness with the menu bar slider or presets."
-        case .roomLight: return "Follows your MacBook's light sensor. Move the menu slider and it learns your preference."
-        case .matchMac: return "Follows your MacBook screen, including the brightness keys and macOS auto-brightness. Move the menu slider and it learns your preference."
+        case .manual: return "Set brightness with the menu bar slider or presets." + belowZero
+        case .roomLight: return "Follows your MacBook's light sensor. Move the menu slider and it learns your preference." + belowZero
+        case .matchMac: return "Follows your MacBook screen, including the brightness keys and macOS auto-brightness. Move the menu slider and it learns your preference." + belowZero
         }
+    }
+
+    private var belowZero: String {
+        settings.softwareDimEnabled ? " Below 0% the monitor stays at its minimum and the picture itself is dimmed." : ""
     }
 
     private func levelSlider(_ label: String, value: Binding<Double>) -> some View {
         HStack {
             Text(label).frame(width: 64, alignment: .leading)
-            Slider(value: Binding(get: { value.wrappedValue }, set: { value.wrappedValue = $0.rounded() }), in: 0...100)
+            Slider(value: Binding(get: { value.wrappedValue }, set: { value.wrappedValue = $0.rounded() }), in: settings.minLevel...100)
             Text("\(Int(value.wrappedValue))%").monospacedDigit().frame(width: 40, alignment: .trailing)
         }
     }

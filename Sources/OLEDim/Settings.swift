@@ -35,13 +35,23 @@ final class Settings: ObservableObject {
     @Published var idleRespectsMedia: Bool { didSet { defaults.set(idleRespectsMedia, forKey: "idleRespectsMedia") } }
 
     @Published var fadeEnabled: Bool { didSet { defaults.set(fadeEnabled, forKey: "fadeEnabled") } }
+    /// Lets levels go below 0 by dimming the picture once the monitor is at its own minimum.
+    @Published var softwareDimEnabled: Bool { didSet { defaults.set(softwareDimEnabled, forKey: "softwareDimEnabled") } }
+
+    /// Below 0 is software dimming: -75 keeps a quarter of the light the monitor gives at 0.
+    static let softwareDimFloor: Double = -75
+    var minLevel: Double { softwareDimEnabled ? Self.softwareDimFloor : 0 }
+    /// Black. Only reached when the MacBook screen is off in Match MacBook mode; the sliders stop at `minLevel`
+    /// so a blacked-out monitor can always be seen to undo (in clamshell the menu bar lives on it).
+    static let black: Double = -100
+    var lowestLevel: Double { softwareDimEnabled ? Self.black : 0 }
 
     private init() {
         defaults.register(defaults: [
             "dayLevel": 70.0, "eveningLevel": 45.0, "nightLevel": 20.0,
             "mode": BrightnessMode.roomLight.rawValue, "autoMin": 5.0, "autoMax": 100.0, "roomOffset": 0.0, "macOffset": 0.0,
             "idleDimEnabled": true, "idleMinutes": 5, "idleLevel": 5.0, "idleRespectsMedia": true,
-            "fadeEnabled": true,
+            "fadeEnabled": true, "softwareDimEnabled": true,
         ])
         dayLevel = defaults.double(forKey: "dayLevel")
         eveningLevel = defaults.double(forKey: "eveningLevel")
@@ -56,6 +66,7 @@ final class Settings: ObservableObject {
         idleLevel = defaults.double(forKey: "idleLevel")
         idleRespectsMedia = defaults.bool(forKey: "idleRespectsMedia")
         fadeEnabled = defaults.bool(forKey: "fadeEnabled")
+        softwareDimEnabled = defaults.bool(forKey: "softwareDimEnabled")
     }
 
     func level(for period: Period) -> Double {
@@ -86,7 +97,7 @@ final class Settings: ObservableObject {
     /// Maps a 0...1 input (log-scaled lux, or the MacBook's brightness) onto autoMin...autoMax.
     func autoLevel(input: Double, mode: BrightnessMode, includeOffset: Bool = true) -> Double {
         let base = autoMin + (autoMax - autoMin) * min(1, max(0, input))
-        return min(100, max(0, base + (includeOffset ? offset(for: mode) : 0)))
+        return min(100, max(minLevel, base + (includeOffset ? offset(for: mode) : 0)))
     }
 
     /// Room light maps on a log scale so dim rooms get finer steps; ~1000 lux counts as fully bright.

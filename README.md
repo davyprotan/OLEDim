@@ -7,6 +7,7 @@ macOS can't change the brightness of most external monitors. Windows can, becaus
 - **Match room light**: reads your MacBook's ambient light sensor and sets the monitor's brightness to match.
 - **Match MacBook screen**: keeps the monitor in sync with your built-in display, so the brightness keys (and macOS auto-brightness) control both.
 - In either mode, nudge the slider and it learns your preference, like "10% dimmer than my MacBook".
+- **Darker than the monitor allows**: many OLEDs still glow at brightness 0. Below 0% OLEDim keeps the monitor at its minimum and dims the picture itself, down to a quarter of that light, or to black when your MacBook screen is off in Match MacBook mode.
 - **Dim when idle**: drops brightness after a few minutes of inactivity to reduce burn-in, and brings it back the moment you touch the mouse or keyboard. It won't dim while a video or call is keeping the screen awake.
 
 <p align="center">
@@ -60,12 +61,14 @@ The same binary works as a CLI:
 
 - **Nothing happens:** turn on **DDC/CI** in your monitor's on-screen menu.
 - **The value changes but the screen doesn't:** HDR and some picture modes lock brightness. Switch to a standard SDR mode.
+- **Still bright at 0%:** that's the monitor's own minimum. Keep **Dim below the monitor's minimum** on in Settings and lower **Darkest** (or the slider) below 0%.
 - **Running MonitorControl or similar too:** they work side by side, but both can write brightness, so use automatic brightness in only one of them.
 
 ## How it works
 
 - Brightness is set over DDC/CI (VCP code `0x10`) using the private `IOAVService` I2C calls on Apple Silicon, the same approach as [m1ddc](https://github.com/waydabber/m1ddc) and [MonitorControl](https://github.com/MonitorControl/MonitorControl).
 - Room light comes from the ambient light sensor via the private `IOHIDEventSystemClient` API. Readings are smoothed and mapped on a log curve between a darkest and brightest level you choose.
+- Below 0% the monitor stays at DDC 0 and the external display's gamma table is scaled down. macOS resets it when OLEDim quits, so the screen can't get stuck dark. `OLEDim get` reports the monitor's own value, so it reads 0 for anything at or below 0%.
 - The MacBook's brightness is read with the private `DisplayServicesGetBrightness` call.
 - Idle time comes from `CGEventSource`. Video and call detection checks for `PreventUserIdleDisplaySleep` power assertions.
 

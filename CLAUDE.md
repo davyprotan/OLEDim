@@ -7,6 +7,7 @@ Menu bar app (Swift, no dependencies) that sets external monitor brightness over
 - `./scripts/build-app.sh` builds `dist/OLEDim.app`; `--install` also replaces `/Applications/OLEDim.app` and relaunches it. Settings live in UserDefaults (`io.github.oledim`) and survive reinstalls.
 - The binary doubles as a CLI: `OLEDim list | get | set <0-100> | login on|off`.
 - Ground truth for what the monitor is actually at: `m1ddc display 2 get luminance` (`brew install m1ddc`; display 2 is the MSI MPG272UX on the dev Mac). Not installed as of 2026-10-30; `OLEDim get` reads the same register.
+- Every `set()` is logged: `/usr/bin/log show --predicate 'subsystem == "io.github.oledim"' --info --last 10m` (the full path matters: `log` is a zsh builtin). Info-level entries live in memory only, so read them soon after.
 - To test sync: `OLEDim set 70` behind the app's back; in an automatic mode it should snap back within ~30s.
 - To test following: in Match MacBook mode, press the brightness keys with the menu closed, then open; the monitor should follow within 1-2s. Expected level is `autoMin + (autoMax - autoMin) * macBrightness + macOffset`, clamped to 0-100 (`defaults read io.github.oledim macOffset`).
 - No unit tests. Verify on hardware: read brightness back after every change.
@@ -19,6 +20,7 @@ Menu bar app (Swift, no dependencies) that sets external monitor brightness over
 | `BrightnessController.swift` | Serialises DDC writes on one queue; a generation counter cancels in-flight fades so slider drags don't pile up. `isReady` gates everything until the real brightness is read. `resync()` re-reads the monitor; a reading taken before a newer `set()` is dropped. |
 | `Automation.swift` | Brightness modes (room light / match MacBook), learned offsets, idle dimming. |
 | `AmbientLight.swift` / `BuiltInDisplay.swift` | Private `IOHIDEventSystemClient` (light sensor, lux) and `DisplayServicesGetBrightness` (MacBook screen, 0–1). |
+| `SoftwareDimmer.swift` | Levels below 0 (down to -75): the monitor stays at DDC 0 and the external displays' gamma table is scaled to take away the rest of the light. |
 | `Settings.swift` / `SettingsView.swift` / `AppDelegate.swift` | Preferences, SwiftUI settings window, NSStatusItem menu. |
 
 ## Gotchas
@@ -32,6 +34,9 @@ Menu bar app (Swift, no dependencies) that sets external monitor brightness over
 - **Dragging the menu slider rewrites the learned offset, which can make the keys look dead.** At a `macOffset` of -24, the monitor sits at 0 once the MacBook is below about 20% and tops out near 76%. Check the offset before debugging "ignores the keys".
 - **"It didn't start" usually means it crashed.** Launch at login only fires at login; nothing relaunches the app after a crash. Check `~/Library/Logs/DiagnosticReports/OLEDim-*.ips` first; symbolicate with `xcrun atos -i -o /Applications/OLEDim.app/Contents/MacOS/OLEDim -l <base> <addr>`.
 - `OLEDim login` with any argument other than `off` turns launch at login **on**; there's no read-only status command.
+- **DDC 0 is not black.** The MPG272UX still gives off a fair amount of light at 0, so levels below 0 are software dimming (gamma), not a monitor setting. `OLEDim get` reads 0 for any level ≤ 0; check the gamma with `CGGetDisplayTransferByTable` (1.0 at the top = no dimming, `light^(1/2.2)` otherwise). macOS drops the gamma table on quit, crash, reconfigure and sometimes wake, so `resync()` and `rescan()` reapply it. It replaces the display's calibration curve while active, and dims every non-built-in display, not only DDC ones.
+- **MacBook screen off → monitor black** in Match MacBook mode (level -100, reached only that way; the sliders stop at -75 so the monitor can't be blacked out in clamshell, where the menu bar is on it). Slider moves made while the MacBook screen is off aren't learned.
+- The menu slider takes ←/→ once clicked (Shift = 10%): `MenuSlider` in `AppDelegate.swift` grabs first responder, because NSSlider only does that with Full Keyboard Access on.
 - Both automatic modes pause with the lid closed: the light sensor is beside the built-in screen.
 - Sliders in `SettingsView` round in the binding instead of using `step:`, which draws a tick for every 1%.
 - `swift build --show-bin-path` is the binary location; it's `.build/out/Products/Release`, not the older `.build/<triple>/release`.
